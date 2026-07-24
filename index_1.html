@@ -1,0 +1,929 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Top Glass — Финансы</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
+<script>
+/* ==== НАСТРОЙКА ОБЛАКА (Firebase) ====
+   Сюда вставляется конфиг из консоли Firebase. Пока он пустой — приложение
+   работает локально. Email ниже должен совпадать с пользователем в Firebase Auth. */
+const FIREBASE_CONFIG = {
+  apiKey: "AIzaSyCPCSRH532mYdyKqaBG9mgQUgz15LKkO7s",
+  authDomain: "topglass-finance.firebaseapp.com",
+  projectId: "topglass-finance",
+  storageBucket: "topglass-finance.firebasestorage.app",
+  messagingSenderId: "532546459271",
+  appId: "1:532546459271:web:ee82976cd865848865ca22"
+};
+const CLOUD_EMAIL = "owner@topglass.app";
+</script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&family=Unbounded:wght@500;700&display=swap" rel="stylesheet">
+<style>
+:root{
+  --bg:#0d1320; --bg2:#101a2c; --panel:rgba(255,255,255,.045); --panel-br:rgba(255,255,255,.09);
+  --txt:#e8edf5; --dim:#8f9bb0; --accent:#5fd6e4; --accent2:#8ab4ff;
+  --good:#4ade80; --warn:#f5b84d; --bad:#f0716f; --radius:16px;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+body{
+  font-family:'Manrope',system-ui,sans-serif; background:
+  radial-gradient(1200px 600px at 80% -10%, rgba(95,214,228,.10), transparent 60%),
+  radial-gradient(900px 500px at -10% 30%, rgba(138,180,255,.08), transparent 60%),
+  linear-gradient(180deg,var(--bg) 0%,var(--bg2) 100%);
+  color:var(--txt); min-height:100vh; padding-bottom:60px;
+}
+header{padding:20px 26px 6px}
+.logo{font-family:'Unbounded',sans-serif;font-size:20px;letter-spacing:.5px}
+.logo em{font-style:normal;color:var(--accent)}
+.logo-sub{font-size:12px;color:var(--dim)}
+nav{
+  display:flex;gap:5px;background:var(--panel);border:1px solid var(--panel-br);border-radius:12px;
+  padding:4px;margin:12px 26px 0;overflow-x:auto;scrollbar-width:thin;
+}
+nav button{background:none;border:none;color:var(--dim);font:600 12.5px 'Manrope';padding:8px 12px;border-radius:9px;cursor:pointer;white-space:nowrap;transition:.15s;flex-shrink:0}
+nav button.on{background:rgba(95,214,228,.15);color:var(--accent)}
+nav button:hover:not(.on){color:var(--txt)}
+main{padding:14px 26px;max-width:1320px;margin:0 auto}
+.grid{display:grid;gap:14px}
+.kpis{grid-template-columns:repeat(auto-fit,minmax(200px,1fr))}
+.card{
+  background:var(--panel);border:1px solid var(--panel-br);border-radius:var(--radius);padding:18px;
+  position:relative;overflow:hidden;backdrop-filter:blur(6px);
+}
+.card::before{
+  content:'';position:absolute;top:-60%;left:-30%;width:60%;height:220%;
+  background:linear-gradient(105deg,transparent,rgba(255,255,255,.05) 45%,rgba(255,255,255,.10) 50%,rgba(255,255,255,.05) 55%,transparent);
+  transform:rotate(8deg);pointer-events:none;
+}
+.kpi-l{font-size:11.5px;color:var(--dim);font-weight:600;text-transform:uppercase;letter-spacing:.8px}
+.kpi-v{font-size:24px;font-weight:800;margin-top:6px;font-variant-numeric:tabular-nums}
+.kpi-s{font-size:12px;margin-top:4px;color:var(--dim)}
+.kpi-s.good{color:var(--good)} .kpi-s.warn{color:var(--warn)} .kpi-s.bad{color:var(--bad)}
+h2{font-size:15px;font-weight:700;margin:22px 0 10px}
+h2 span{color:var(--dim);font-weight:500;font-size:13px}
+.charts{grid-template-columns:1fr 1fr}
+@media(max-width:900px){.charts{grid-template-columns:1fr}}
+.chart-card{height:320px;padding:16px}
+.chart-card canvas{max-height:266px}
+.chart-tall{height:380px}.chart-tall canvas{max-height:326px}
+.ct{font-size:13px;font-weight:700;margin-bottom:8px;color:var(--dim)}
+table{width:100%;border-collapse:collapse;font-size:12.5px}
+th{color:var(--dim);font-weight:600;text-align:right;padding:7px 9px;border-bottom:1px solid var(--panel-br);white-space:nowrap;position:sticky;top:0;background:rgba(16,24,40,.9)}
+th:first-child,td:first-child{text-align:left}
+td{padding:7px 9px;text-align:right;border-bottom:1px solid rgba(255,255,255,.04);font-variant-numeric:tabular-nums;white-space:nowrap}
+tr:last-child td{border-bottom:none}
+tr.total td{font-weight:800;border-top:1px solid var(--panel-br)}
+.scroll{overflow:auto;max-height:70vh}
+.dot{display:inline-block;width:9px;height:9px;border-radius:3px;margin-right:7px;vertical-align:1px}
+.tag{display:inline-block;padding:2px 8px;border-radius:8px;font-size:11px;font-weight:700}
+.tag.good{background:rgba(74,222,128,.15);color:var(--good)}
+.tag.warn{background:rgba(245,184,77,.15);color:var(--warn)}
+.tag.bad{background:rgba(240,113,111,.15);color:var(--bad)}
+.pos{color:var(--good)}.neg{color:var(--bad)}
+.drop{border:1.5px dashed var(--panel-br);border-radius:var(--radius);padding:24px;text-align:center;cursor:pointer;transition:.15s;background:var(--panel)}
+.drop:hover,.drop.over{border-color:var(--accent);background:rgba(95,214,228,.06)}
+.drop b{color:var(--accent)}
+.drop .hint{font-size:12px;color:var(--dim);margin-top:6px}
+.two{grid-template-columns:1fr 1fr}
+@media(max-width:800px){.two{grid-template-columns:1fr}}
+select,input[type=text],input[type=number]{
+  background:rgba(0,0,0,.25);border:1px solid var(--panel-br);color:var(--txt);
+  border-radius:9px;padding:8px 10px;font:600 13px 'Manrope';outline:none;
+}
+input[type=number]{width:110px;text-align:right}
+select:focus,input:focus{border-color:var(--accent)}
+.btn{background:var(--accent);color:#04222a;border:none;border-radius:10px;padding:10px 18px;font:800 13px 'Manrope';cursor:pointer;transition:.15s}
+.btn:hover{filter:brightness(1.1)}
+.btn.ghost{background:transparent;color:var(--dim);border:1px solid var(--panel-br)}
+.btn.ghost:hover{color:var(--txt)}
+.btn.danger{background:transparent;color:var(--bad);border:1px solid rgba(240,113,111,.4)}
+.btn.sm{padding:5px 10px;font-size:12px}
+.row{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+.note{font-size:12.5px;color:var(--dim);line-height:1.55}
+.msg{padding:10px 14px;border-radius:10px;font-size:13px;margin:10px 0;display:none}
+.msg.ok{display:block;background:rgba(74,222,128,.12);color:var(--good)}
+.msg.err{display:block;background:rgba(240,113,111,.12);color:var(--bad)}
+.empty{padding:46px 20px;text-align:center;color:var(--dim)}
+.empty .big{font-family:'Unbounded';font-size:16px;color:var(--txt);margin-bottom:8px}
+.hidden{display:none!important}
+#gate{position:fixed;inset:0;background:linear-gradient(180deg,var(--bg),var(--bg2));z-index:99;display:flex;align-items:center;justify-content:center}
+#gate .card{width:min(360px,90vw);text-align:center;padding:30px}
+#gate input{width:100%;margin:14px 0;text-align:center;font-size:16px}
+#gate .err{color:var(--bad);font-size:12.5px;min-height:18px;margin-bottom:8px}
+.instr{line-height:1.7;font-size:13.5px}
+.instr h3{margin:18px 0 6px;font-size:14px;color:var(--accent)}
+.instr li{margin:4px 0 4px 18px}
+footer{max-width:1320px;margin:30px auto 0;padding:0 26px;font-size:11.5px;color:var(--dim)}
+</style>
+</head>
+<body>
+<div id="gate" class="hidden">
+  <div class="card">
+    <div class="logo">TOP <em>GLASS</em></div>
+    <div class="note" style="margin-top:6px">Введи пароль — устройство запомнит его, спрашивать больше не будем.</div>
+    <input type="password" id="gate-pw" placeholder="Пароль" onkeydown="if(event.key==='Enter')gateLogin()">
+    <div class="err" id="gate-err"></div>
+    <button class="btn" style="width:100%" onclick="gateLogin()">Войти</button>
+  </div>
+</div>
+<header>
+  <div class="logo">TOP <em>GLASS</em></div>
+  <div class="logo-sub">финансовый центр сети · Актобе · 8 точек</div>
+</header>
+<nav id="nav"></nav>
+<main>
+
+<!-- ДАШБОРД -->
+<section id="pg-dash">
+  <div id="dash-empty" class="empty hidden">
+    <div class="big">Данных пока нет</div>
+    <div>Открой вкладку «➕ Новый месяц» и импортируй Финансовый_Дашборд_v25.xlsx —<br>вся история появится сразу. Или добавь первый месяц вручную.</div>
+  </div>
+  <div id="dash-body">
+    <div class="row" style="margin-bottom:12px"><span class="note">Показатели за:</span><select id="dash-month" onchange="renderDash()"></select></div>
+    <div class="grid kpis">
+      <div class="card"><div class="kpi-l">Выручка сети</div><div class="kpi-v" id="k-rev">—</div><div class="kpi-s" id="k-rev-s"></div></div>
+      <div class="card"><div class="kpi-l">Прибыль</div><div class="kpi-v" id="k-prof">—</div><div class="kpi-s" id="k-prof-s"></div></div>
+      <div class="card"><div class="kpi-l">Чистая маржа</div><div class="kpi-v" id="k-marg">—</div><div class="kpi-s" id="k-marg-s"></div></div>
+      <div class="card"><div class="kpi-l">ЗП от выручки</div><div class="kpi-v" id="k-zp">—</div><div class="kpi-s" id="k-zp-s"></div></div>
+      <div class="card"><div class="kpi-l">Склад сети (закуп)</div><div class="kpi-v" id="k-stock">—</div><div class="kpi-s" id="k-stock-s"></div></div>
+    </div>
+    <div class="grid charts" style="margin-top:14px">
+      <div class="card chart-card"><div class="ct">Выручка и прибыль по месяцам</div><canvas id="ch-rev"></canvas></div>
+      <div class="card chart-card"><div class="ct">Выручка по точкам — выбранный месяц</div><canvas id="ch-dstores"></canvas></div>
+      <div class="card chart-card"><div class="ct">Структура расходов по месяцам</div><canvas id="ch-exp"></canvas></div>
+      <div class="card chart-card"><div class="ct">Склад (закуп) vs продажи</div><canvas id="ch-dstock"></canvas></div>
+    </div>
+    <h2>Быстрая сводка по точкам</h2>
+    <div class="card scroll"><table id="t-dstores"></table></div>
+  </div>
+</section>
+
+<!-- ДАННЫЕ -->
+<section id="pg-data" class="hidden">
+  <div class="row" style="margin-bottom:12px">
+    <span class="note">Фильтр:</span>
+    <select id="data-store" onchange="renderData()"></select>
+    <select id="data-month" onchange="renderData()"></select>
+  </div>
+  <div class="card scroll"><table id="t-data"></table></div>
+  <p class="note" style="margin-top:10px">Итого расход = Товар + Аренда + ЗП + Прочее · Прибыль = Выручка − Итого расход · Чист. маржа = Прибыль/Выручка · Вал. маржа = (Выручка − Товар)/Выручка · Коэф. оборач. = Остаток(закуп) ÷ закуп месяца, т.е. запас в месяцах. ЗП ≥ 20% выручки подсвечивается.</p>
+</section>
+
+<!-- ПО МЕСЯЦАМ -->
+<section id="pg-monthly" class="hidden">
+  <div class="card chart-card chart-tall"><div class="ct">Динамика сети по месяцам</div><canvas id="ch-monthly"></canvas></div>
+  <h2>Сводка по всей сети</h2>
+  <div class="card scroll"><table id="t-monthly"></table></div>
+</section>
+
+<!-- СКЛАД И ПРОДАЖИ -->
+<section id="pg-svp" class="hidden">
+  <div class="card chart-card chart-tall"><div class="ct">Склад сети (закупная цена) vs продажи</div><canvas id="ch-svp"></canvas></div>
+  <h2>Остатки по закупу: точки × месяцы</h2>
+  <div class="card scroll"><table id="t-svp"></table></div>
+</section>
+
+<!-- ОБЩАЯ ОБОРАЧИВАЕМОСТЬ -->
+<section id="pg-turn" class="hidden">
+  <div class="card chart-card chart-tall"><div class="ct">Коэффициент оборачиваемости (запас, мес) по точкам</div><canvas id="ch-turn"></canvas></div>
+  <h2>Коэффициент по месяцам и точкам <span>· остаток(закуп) ÷ закуп месяца · норма ~3, Шернияза 3.5</span></h2>
+  <div class="card scroll"><table id="t-turn"></table></div>
+</section>
+
+<!-- ОСТАТКИ СКЛАДОВ -->
+<section id="pg-stocks" class="hidden">
+  <div class="row" style="margin-bottom:12px"><span class="note">Точка:</span><select id="stocks-store" onchange="renderStocks()"></select></div>
+  <div class="card chart-card"><div class="ct">Остатки: закуп и продажная по месяцам</div><canvas id="ch-stocks"></canvas></div>
+  <h2>Подробно по месяцам</h2>
+  <div class="card scroll"><table id="t-stocks"></table></div>
+</section>
+
+<!-- ИСТОРИЯ ВЫРУЧКИ -->
+<section id="pg-hist" class="hidden">
+  <div class="card chart-card chart-tall"><div class="ct">Выручка сети с 2019 года</div><canvas id="ch-hist"></canvas></div>
+  <h2>Ранние периоды (до августа 2025) <span>· вписывай вручную — месяцы из приложения подставляются сами</span></h2>
+  <div class="card">
+    <table id="t-hist"></table>
+    <div class="row" style="margin-top:12px">
+      <input type="text" id="hist-label" placeholder="Период (напр. 2019 или Июль 2025)" style="width:220px">
+      <input type="number" id="hist-rev" placeholder="Выручка, ₸">
+      <button class="btn sm" onclick="addHist()">Добавить</button>
+    </div>
+  </div>
+</section>
+
+<!-- МАГАЗИНЫ -->
+<section id="pg-stores" class="hidden">
+  <div class="row" style="margin-bottom:12px"><span class="note">Магазин:</span><select id="store-sel" onchange="renderStore()"></select></div>
+  <div class="grid kpis" id="store-kpis"></div>
+  <div class="grid charts" style="margin-top:14px">
+    <div class="card chart-card"><div class="ct">Выручка и прибыль</div><canvas id="ch-store1"></canvas></div>
+    <div class="card chart-card"><div class="ct">Структура расходов (100%)</div><canvas id="ch-store2"></canvas></div>
+  </div>
+  <h2>Все показатели по месяцам</h2>
+  <div class="card scroll"><table id="t-store"></table></div>
+  <h2>Доля статей в расходах</h2>
+  <div class="card scroll"><table id="t-store-pct"></table></div>
+</section>
+
+<!-- НОВЫЙ МЕСЯЦ -->
+<section id="pg-up" class="hidden">
+  <div class="row" style="margin-bottom:14px">
+    <span class="note">Месяц:</span>
+    <select id="up-month"></select><select id="up-year"></select>
+  </div>
+  <div class="grid two">
+    <div class="drop" id="drop-fin">
+      <div>📄 <b>Расход / Доход</b> — «Расход_Доход_за_….xlsx»</div>
+      <div class="hint">нажми или перетащи · колонки: Магазин, Выручка, Товар, Аренда, ЗП, Прочее</div>
+    </div>
+    <div class="drop" id="drop-stock">
+      <div>📦 <b>Остатки складов</b> — xlsx</div>
+      <div class="hint">колонки: Магазин, Закупная, Продажная (docx пересохрани как xlsx)</div>
+    </div>
+  </div>
+  <input type="file" id="file-fin" accept=".xlsx,.xls" class="hidden">
+  <input type="file" id="file-stock" accept=".xlsx,.xls" class="hidden">
+  <div class="msg" id="up-msg"></div>
+  <h2>Проверка перед сохранением <span>· всё можно поправить руками</span></h2>
+  <div class="card scroll"><table class="edit-t" id="t-edit"></table></div>
+  <div class="row" style="margin-top:14px">
+    <button class="btn" onclick="saveMonth()">Сохранить месяц</button>
+    <span class="note">Если месяц уже есть — данные перезапишутся.</span>
+  </div>
+
+  <h2>☁️ Облачное хранение</h2>
+  <div class="card">
+    <div class="note" style="margin-bottom:8px">Данные хранятся в облаке (Firebase) и синхронизируются между всеми устройствами автоматически. На новом устройстве нужно один раз ввести пароль — дальше всё само.</div>
+    <div class="note" id="cl-status">Проверяю облако…</div>
+  </div>
+
+  <h2>Импорт истории и резервная копия</h2>
+  <div class="grid two">
+    <div class="card">
+      <div class="ct">Импорт из Финансовый_Дашборд_v25.xlsx</div>
+      <div class="note" style="margin-bottom:10px">Читает лист «📊 Данные» (все месяцы × точки), «Остатки складов» и «История выручки».</div>
+      <div class="drop" id="drop-imp"><b>Выбрать файл дашборда</b></div>
+      <input type="file" id="file-imp" accept=".xlsx" class="hidden">
+    </div>
+    <div class="card">
+      <div class="ct">Резервная копия</div>
+      <div class="note" style="margin-bottom:10px">Скачай копию данных в JSON — и сможешь восстановить их в любой момент.</div>
+      <div class="row">
+        <button class="btn ghost" onclick="exportJSON()">Скачать копию</button>
+        <button class="btn ghost" onclick="document.getElementById('file-json').click()">Восстановить</button>
+        <input type="file" id="file-json" accept=".json" class="hidden">
+      </div>
+    </div>
+  </div>
+  <div class="msg" id="data-msg"></div>
+  <h2>Сохранённые месяцы</h2>
+  <div class="card scroll"><table id="t-months"></table></div>
+</section>
+
+<!-- ИНСТРУКЦИЯ -->
+<section id="pg-instr" class="hidden">
+  <div class="card instr">
+    <h3>Первый запуск</h3>
+    <li>Открой «➕ Новый месяц» → блок «Импорт» → загрузи <b>Финансовый_Дашборд_v25.xlsx</b>. Вся история с августа 2025 подтянется во все вкладки автоматически.</li>
+    <li>Данные сохраняются в приложении и остаются при следующем открытии — импорт нужен один раз.</li>
+    <h3>Каждый месяц</h3>
+    <li>Вкладка «➕ Новый месяц»: проверь месяц/год (угадываются из имени файла).</li>
+    <li>Загрузи файл <b>Расход_Доход_за_….xlsx</b> — приложение распознает точки (в т.ч. ЖГ, КС, АЦ, ШР, ХБК, Хром, Вокз/ЖД, Орал) и колонки по заголовкам.</li>
+    <li>Загрузи <b>остатки складов</b> (xlsx: Магазин | Закупная | Продажная). Если остатки в docx — открой в Word и пересохрани как xlsx.</li>
+    <li>Проверь таблицу, поправь при необходимости → <b>«Сохранить месяц»</b>. Дашборд и все вкладки обновятся сами.</li>
+    <h3>Что где смотреть</h3>
+    <li><b>Дашборд</b> — KPI и графики за выбранный месяц.</li>
+    <li><b>Данные</b> — мастер-таблица: выручка, аренда+интернет, товар/закуп, ЗП продавцов, прочее, итого расход, прибыль, чистая и валовая маржа, коэффициент оборачиваемости. Есть фильтры по точке и месяцу.</li>
+    <li><b>По месяцам</b> — динамика всей сети + строка ИТОГО.</li>
+    <li><b>Склад и продажи</b> — остатки по закупной цене по точкам и месяцам.</li>
+    <li><b>Оборачиваемость</b> — запас в месяцах по каждой точке; норма ~3 мес, Шернияза 3.5 (двухзальная). Перегруз и недогруз подсвечиваются.</li>
+    <li><b>Остатки складов</b> — подробно по точке: закуп, продажная, наценка, коэффициент.</li>
+    <li><b>История выручки</b> — график с 2019 года; старые периоды впиши один раз вручную.</li>
+    <li><b>Магазины</b> — полная карточка каждой точки: все показатели по месяцам, итого, среднее, структура расходов.</li>
+    <h3>Облачное хранение</h3>
+    <li>Данные лежат в облаке (Firebase) — открой сайт на любом устройстве и сразу увидишь всё.</li>
+    <li>Каждое сохранение месяца автоматически улетает в облако; статус виден в блоке «☁️ Облачное хранение».</li>
+    <li>Если интернета нет — приложение работает с локальной копией и предупредит об этом.</li>
+    <li>Пароля нет, поэтому не публикуй ссылку на сайт — данные увидит любой, у кого она есть.</li>
+    <h3>Важные правила</h3>
+    <li>Склад всегда считается по <b>закупной</b> цене (не продажной).</li>
+    <li>ЗП выше 20% выручки — красный флаг, подсвечивается везде.</li>
+    <li>Раз в месяц скачивай резервную копию (JSON) — на всякий случай.</li>
+  </div>
+</section>
+
+</main>
+<footer>Top Glass · данные сохраняются автоматически и доступны при следующем открытии</footer>
+
+<script>
+/* ===== константы ===== */
+const STORES=['Жилгородок','Кисилево','Акация','Шернияза','ХБК','Хромтау','Вокзал','Орал'];
+const COLORS={'Жилгородок':'#3f7fc4','Кисилево':'#1fae8f','Акация':'#9b59d0','Шернияза':'#d9b323','ХБК':'#b06fd0','Хромтау':'#2e86c1','Вокзал':'#e05a4e','Орал':'#2ecc71'};
+const NORMS=s=>s==='Шернияза'?3.5:3.0;
+const MONTHS_RU=['Январь','Февраль','Март','Апрель','Май','Июнь','Июль','Август','Сентябрь','Октябрь','Ноябрь','Декабрь'];
+const M_SHORT=['Янв','Фев','Мар','Апр','Май','Июн','Июл','Авг','Сен','Окт','Ноя','Дек'];
+const FIELDS=[['rev','Выручка'],['goods','Товар/закуп'],['rent','Аренда+инт.'],['salary','ЗП продавцов'],['other','Прочее']];
+const KEY='tg-finance-v1';
+const PAGES=[['dash','Дашборд'],['data','Данные'],['monthly','По месяцам'],['svp','Склад и продажи'],['turn','Оборачиваемость'],['stocks','Остатки складов'],['hist','История выручки'],['stores','Магазины'],['up','➕ Новый месяц'],['instr','Инструкция']];
+
+let data={months:{},history:[]};
+let charts={}, pending=null, curPage='dash';
+
+/* ===== storage: Firebase-облако + локальный кэш ===== */
+const inClaude=typeof window.storage!=='undefined'&&window.storage&&typeof window.storage.get==='function';
+let fdb=null,fdoc=null,lastPushed='';
+function clStatus(txt,ok){const el=document.getElementById('cl-status');if(el){el.textContent=txt;el.style.color=ok===true?'var(--good)':ok===false?'var(--bad)':'var(--dim)';}}
+function applyRemote(json){
+  if(!json||json===lastPushed)return;
+  try{const d=JSON.parse(json);d.months=d.months||{};d.history=d.history||[];data=d;lastPushed=json;persistLocal();refreshAll();}catch(e){}
+}
+function initCloud(){
+  if(!FIREBASE_CONFIG){clStatus('Облако ещё не настроено — данные хранятся только на этом устройстве.');return;}
+  firebase.initializeApp(FIREBASE_CONFIG);
+  fdb=firebase.firestore();fdoc=fdb.collection('topglass').doc('data');
+  firebase.auth().onAuthStateChanged(u=>{
+    if(u){
+      document.getElementById('gate').classList.add('hidden');
+      clStatus('☁️ Облако подключено. Синхронизация автоматическая.',true);
+      fdoc.onSnapshot(s=>{if(s.exists)applyRemote(s.data().json);},
+        e=>clStatus('Облако недоступно: '+e.message+' — работаю с локальной копией.',false));
+    }else{
+      firebase.auth().signInAnonymously().catch(e=>clStatus('Не удалось подключиться к облаку: '+e.message,false));
+    }
+  });
+}
+async function gateLogin(){
+  const pw=document.getElementById('gate-pw').value;
+  const err=document.getElementById('gate-err');err.textContent='';
+  if(!pw)return;
+  try{await firebase.auth().signInWithEmailAndPassword(CLOUD_EMAIL,pw);document.getElementById('gate-pw').value='';}
+  catch(e){err.textContent=/wrong-password|invalid-credential|invalid-login/.test(e.code||'')?'Неверный пароль.':'Ошибка: '+e.message;}
+}
+async function persistLocal(){
+  try{
+    if(inClaude)await window.storage.set(KEY,JSON.stringify(data));
+    else localStorage.setItem(KEY,JSON.stringify(data));
+  }catch(e){}
+}
+async function loadData(){
+  try{
+    if(inClaude){const r=await window.storage.get(KEY);if(r&&r.value)data=JSON.parse(r.value);}
+    else{const r=localStorage.getItem(KEY);if(r)data=JSON.parse(r);}
+  }catch(e){}
+  data.months=data.months||{};data.history=data.history||[];
+  refreshAll();
+  initCloud();
+}
+async function persist(){
+  await persistLocal();
+  if(fdoc&&firebase.auth().currentUser){
+    try{
+      const json=JSON.stringify(data);lastPushed=json;
+      await fdoc.set({json,updated:new Date().toISOString()});
+      clStatus('☁️ Сохранено в облако · '+new Date().toLocaleTimeString('ru-RU'),true);
+    }catch(e){clStatus('Не удалось отправить в облако: '+e.message+'. Данные сохранены локально.',false);}
+  }
+}
+
+/* ===== утилиты ===== */
+const fmt=n=>n==null||isNaN(n)?'—':Math.round(n).toLocaleString('ru-RU');
+const fmtM=n=>n==null||isNaN(n)?'—':(n/1e6).toLocaleString('ru-RU',{maximumFractionDigits:2})+' млн ₸';
+const pct=n=>n==null||isNaN(n)?'—':(n*100).toFixed(1)+'%';
+const mKeys=()=>Object.keys(data.months).sort();
+const mLabel=k=>{const[y,m]=k.split('-');return MONTHS_RU[+m-1]+' '+y;};
+const mShort=k=>{const[y,m]=k.split('-');return M_SHORT[+m-1]+' '+y.slice(2);};
+const num=v=>{if(v==null)return 0;if(typeof v==='number')return v;
+  const s=String(v).replace(/[\s\u00a0₸]/g,'').replace(',','.');const n=parseFloat(s);return isNaN(n)?0:n;};
+function calc(d,stock){
+  const exp=(d.goods||0)+(d.rent||0)+(d.salary||0)+(d.other||0);
+  const profit=(d.rev||0)-exp;
+  return {exp,profit,
+    netM:d.rev?profit/d.rev:null,
+    grossM:d.rev?((d.rev||0)-(d.goods||0))/d.rev:null,
+    zp:d.rev?(d.salary||0)/d.rev:null,
+    coef:(stock&&d.goods)?stock/d.goods:null};
+}
+function netTotals(m){
+  const t={rev:0,goods:0,rent:0,salary:0,other:0,stock:0,retail:0};
+  for(const s of STORES){const d=m.stores?.[s];if(d){t.rev+=d.rev||0;t.goods+=d.goods||0;t.rent+=d.rent||0;t.salary+=d.salary||0;t.other+=d.other||0;}
+    const sk=m.stocks?.[s];if(sk){t.stock+=sk.purchase||0;t.retail+=sk.retail||0;}}
+  t.exp=t.goods+t.rent+t.salary+t.other;t.profit=t.rev-t.exp;
+  return t;
+}
+function showMsg(id,txt,cls){const el=document.getElementById(id);el.textContent=txt;el.className='msg '+cls;setTimeout(()=>{el.className='msg'},8000);}
+function normStore(s){
+  if(!s)return null;s=String(s).trim().toLowerCase();
+  const map={'жилгородок':'Жилгородок','жг':'Жилгородок','кисилево':'Кисилево','киселево':'Кисилево','кс':'Кисилево',
+    'акация':'Акация','ац':'Акация','шернияза':'Шернияза','шр':'Шернияза','хбк':'ХБК','хромтау':'Хромтау','хром':'Хромтау',
+    'вокзал':'Вокзал','вокз':'Вокзал','жд':'Вокзал','орал':'Орал'};
+  if(map[s])return map[s];
+  for(const k in map)if(k.length>2&&s.includes(k))return map[k];
+  return map[s]||null;
+}
+
+/* ===== навигация ===== */
+function buildNav(){
+  document.getElementById('nav').innerHTML=PAGES.map(([id,l])=>`<button id="nav-${id}" onclick="go('${id}')">${l}</button>`).join('');
+  document.getElementById('nav-dash').classList.add('on');
+}
+function go(p){
+  curPage=p;
+  for(const[id]of PAGES){
+    document.getElementById('pg-'+id).classList.toggle('hidden',id!==p);
+    document.getElementById('nav-'+id).classList.toggle('on',id===p);
+  }
+  render(p);
+}
+function render(p){
+  ({dash:renderDash,data:renderData,monthly:renderMonthly,svp:renderSvp,turn:renderTurn,
+    stocks:renderStocks,hist:renderHist,stores:renderStore,up:renderMonthsList,instr:()=>{}})[p]();
+}
+function refreshAll(){
+  const keys=mKeys();
+  fillSel('dash-month',keys.map(k=>[k,mLabel(k)]),keys[keys.length-1]);
+  fillSel('data-store',[['','Все точки'],...STORES.map(s=>[s,s])]);
+  fillSel('data-month',[['','Все месяцы'],...keys.map(k=>[k,mLabel(k)])]);
+  fillSel('stocks-store',STORES.map(s=>[s,s]));
+  fillSel('store-sel',STORES.map(s=>[s,s]));
+  document.getElementById('dash-empty').classList.toggle('hidden',keys.length>0);
+  document.getElementById('dash-body').classList.toggle('hidden',keys.length===0);
+  render(curPage);
+}
+function fillSel(id,opts,val){
+  const el=document.getElementById(id);const old=el.value;
+  el.innerHTML=opts.map(([v,l])=>`<option value="${v}">${l}</option>`).join('');
+  if(val!==undefined&&val!=null)el.value=val;
+  else if([...el.options].some(o=>o.value===old))el.value=old;
+}
+
+/* ===== графики ===== */
+function mkChart(id,type,cfg,opts={}){
+  if(charts[id])charts[id].destroy();
+  const scale={grid:{color:'rgba(255,255,255,.06)'},ticks:{color:'#8f9bb0',font:{family:'Manrope',size:11},
+    callback:function(v){return typeof v==='number'?(Math.abs(v)>=1e6?(v/1e6)+'М':v.toLocaleString('ru-RU')):this.getLabelForValue(v);}}};
+  charts[id]=new Chart(document.getElementById(id),{type,data:cfg,options:{
+    responsive:true,maintainAspectRatio:false,
+    plugins:{legend:{labels:{color:'#c6cfdd',font:{family:'Manrope',size:11},boxWidth:12}}},
+    scales:{x:{...scale,stacked:!!opts.stacked},y:{...scale,stacked:!!opts.stacked,max:opts.max}}
+  }});
+}
+
+/* ===== ДАШБОРД ===== */
+function renderDash(){
+  const keys=mKeys();if(!keys.length)return;
+  const cur=document.getElementById('dash-month').value||keys[keys.length-1];
+  const idx=keys.indexOf(cur),m=data.months[cur],t=netTotals(m);
+  const prev=idx>0?netTotals(data.months[keys[idx-1]]):null;
+  document.getElementById('k-rev').textContent=fmtM(t.rev);
+  const rd=document.getElementById('k-rev-s');
+  if(prev&&prev.rev){const d=(t.rev-prev.rev)/prev.rev;rd.textContent=(d>=0?'▲ +':'▼ ')+(d*100).toFixed(1)+'% к пред. мес';rd.className='kpi-s '+(d>=0?'good':'bad');}else rd.textContent='';
+  document.getElementById('k-prof').textContent=fmtM(t.profit);
+  document.getElementById('k-prof-s').textContent=prev?'пред. мес: '+fmtM(prev.profit):'';
+  const marg=t.rev?t.profit/t.rev:null;
+  document.getElementById('k-marg').textContent=pct(marg);
+  const me=document.getElementById('k-marg-s');
+  me.textContent=marg==null?'':(marg<0?'убыточный месяц':marg<.15?'ниже среднего':'здоровый уровень');
+  me.className='kpi-s '+(marg==null?'':marg<0?'bad':marg<.15?'warn':'good');
+  const zp=t.rev?t.salary/t.rev:null;
+  document.getElementById('k-zp').textContent=pct(zp);
+  const ze=document.getElementById('k-zp-s');
+  ze.textContent=zp==null?'':(zp>=.2?'выше нормы 20% — следить':'в норме (≤20%)');
+  ze.className='kpi-s '+(zp==null?'':zp>=.2?'warn':'good');
+  document.getElementById('k-stock').textContent=t.stock?fmtM(t.stock):'—';
+  document.getElementById('k-stock-s').textContent=t.stock?'остатки на конец месяца':'остатки не загружены';
+
+  const labels=keys.map(mShort),T=keys.map(k=>netTotals(data.months[k]));
+  mkChart('ch-rev','line',{labels,datasets:[
+    {label:'Выручка',data:T.map(t=>t.rev),borderColor:'#5fd6e4',backgroundColor:'rgba(95,214,228,.12)',fill:true,tension:0},
+    {label:'Прибыль',data:T.map(t=>t.profit),borderColor:'#4ade80',tension:0}]});
+  const sN=STORES.filter(s=>m.stores?.[s]);
+  mkChart('ch-dstores','bar',{labels:sN,datasets:[
+    {label:'Выручка',data:sN.map(s=>m.stores[s].rev||0),backgroundColor:sN.map(s=>COLORS[s])},
+    {label:'Прибыль',data:sN.map(s=>calc(m.stores[s]).profit),backgroundColor:'rgba(255,255,255,.25)'}]});
+  mkChart('ch-exp','bar',{labels,datasets:[['goods','Товар','#3f7fc4'],['salary','ЗП','#e05a4e'],['rent','Аренда','#d9b323'],['other','Прочее','#9b59d0']]
+    .map(([f,l,c])=>({label:l,data:T.map(t=>t[f]),backgroundColor:c,stack:'e'}))},{stacked:true});
+  mkChart('ch-dstock','bar',{labels,datasets:[
+    {label:'Склад (закуп)',data:T.map(t=>t.stock||null),backgroundColor:'rgba(138,180,255,.55)'},
+    {label:'Продажи',data:T.map(t=>t.rev),backgroundColor:'rgba(95,214,228,.55)'}]});
+
+  let h='<tr><th>Точка</th><th>Выручка</th><th>Прибыль</th><th>Чист. маржа</th><th>ЗП%</th><th>Склад (закуп)</th><th>Запас, мес</th></tr>';
+  for(const s of sN){
+    const d=m.stores[s],sk=m.stocks?.[s],c=calc(d,sk?.purchase);
+    h+=`<tr><td><span class="dot" style="background:${COLORS[s]}"></span>${s}</td><td>${fmt(d.rev)}</td>
+    <td class="${c.profit<0?'neg':'pos'}">${fmt(c.profit)}</td><td>${pct(c.netM)}</td>
+    <td><span class="tag ${c.zp>=.2?'warn':'good'}">${pct(c.zp)}</span></td>
+    <td>${sk?fmt(sk.purchase):'—'}</td><td>${c.coef!=null?c.coef.toFixed(1):'—'}</td></tr>`;
+  }
+  document.getElementById('t-dstores').innerHTML=h;
+}
+
+/* ===== ДАННЫЕ ===== */
+function renderData(){
+  const fs=document.getElementById('data-store').value,fm=document.getElementById('data-month').value;
+  let h='<tr><th>Месяц</th><th>Магазин</th><th>Выручка</th><th>Аренда+инт.</th><th>Товар/закуп</th><th>ЗП продавцов</th><th>Прочее</th><th>Итого расход</th><th>Прибыль</th><th>Чист. маржа</th><th>Вал. маржа</th><th>Коэф. оборач.</th></tr>';
+  const tot={rev:0,rent:0,goods:0,salary:0,other:0,exp:0,profit:0};let rows=0;
+  for(const k of mKeys()){
+    if(fm&&k!==fm)continue;
+    const m=data.months[k];
+    for(const s of STORES){
+      if(fs&&s!==fs)continue;
+      const d=m.stores?.[s];if(!d)continue;
+      const c=calc(d,m.stocks?.[s]?.purchase);rows++;
+      for(const f of['rev','rent','goods','salary','other'])tot[f]+=d[f]||0;
+      tot.exp+=c.exp;tot.profit+=c.profit;
+      h+=`<tr><td>${mLabel(k)}</td><td><span class="dot" style="background:${COLORS[s]}"></span>${s}</td>
+      <td>${fmt(d.rev)}</td><td>${fmt(d.rent)}</td><td>${fmt(d.goods)}</td>
+      <td>${c.zp>=.2?`<span class="tag warn">${fmt(d.salary)}</span>`:fmt(d.salary)}</td>
+      <td>${fmt(d.other)}</td><td>${fmt(c.exp)}</td>
+      <td class="${c.profit<0?'neg':'pos'}">${fmt(c.profit)}</td>
+      <td>${pct(c.netM)}</td><td>${pct(c.grossM)}</td><td>${c.coef!=null?c.coef.toFixed(2):'—'}</td></tr>`;
+    }
+  }
+  if(rows>1)h+=`<tr class="total"><td>ИТОГО</td><td>${rows} строк</td><td>${fmt(tot.rev)}</td><td>${fmt(tot.rent)}</td><td>${fmt(tot.goods)}</td><td>${fmt(tot.salary)}</td><td>${fmt(tot.other)}</td><td>${fmt(tot.exp)}</td><td class="${tot.profit<0?'neg':'pos'}">${fmt(tot.profit)}</td><td>${pct(tot.rev?tot.profit/tot.rev:null)}</td><td>${pct(tot.rev?(tot.rev-tot.goods)/tot.rev:null)}</td><td></td></tr>`;
+  document.getElementById('t-data').innerHTML=rows?h:'<tr><td class="note">Нет данных — импортируй историю или добавь месяц.</td></tr>';
+}
+
+/* ===== ПО МЕСЯЦАМ ===== */
+function renderMonthly(){
+  const keys=mKeys();
+  let h='<tr><th>Месяц</th><th>Выручка</th><th>Аренда+инт.</th><th>Товар/закуп</th><th>ЗП</th><th>Прочее</th><th>Итого расход</th><th>Прибыль</th><th>Чист. маржа</th><th>Вал. маржа</th></tr>';
+  const g={rev:0,rent:0,goods:0,salary:0,other:0,exp:0,profit:0};
+  for(const k of keys){
+    const t=netTotals(data.months[k]);
+    for(const f of['rev','rent','goods','salary','other','exp','profit'])g[f]+=t[f];
+    h+=`<tr><td>${mLabel(k)}</td><td>${fmt(t.rev)}</td><td>${fmt(t.rent)}</td><td>${fmt(t.goods)}</td><td>${fmt(t.salary)}</td><td>${fmt(t.other)}</td><td>${fmt(t.exp)}</td><td class="${t.profit<0?'neg':'pos'}">${fmt(t.profit)}</td><td>${pct(t.rev?t.profit/t.rev:null)}</td><td>${pct(t.rev?(t.rev-t.goods)/t.rev:null)}</td></tr>`;
+  }
+  h+=`<tr class="total"><td>ИТОГО</td><td>${fmt(g.rev)}</td><td>${fmt(g.rent)}</td><td>${fmt(g.goods)}</td><td>${fmt(g.salary)}</td><td>${fmt(g.other)}</td><td>${fmt(g.exp)}</td><td class="${g.profit<0?'neg':'pos'}">${fmt(g.profit)}</td><td>${pct(g.rev?g.profit/g.rev:null)}</td><td>${pct(g.rev?(g.rev-g.goods)/g.rev:null)}</td></tr>`;
+  document.getElementById('t-monthly').innerHTML=keys.length?h:'<tr><td class="note">Нет данных.</td></tr>';
+  const T=keys.map(k=>netTotals(data.months[k]));
+  mkChart('ch-monthly','line',{labels:keys.map(mShort),datasets:[
+    {label:'Выручка',data:T.map(t=>t.rev),borderColor:'#5fd6e4',tension:0},
+    {label:'Итого расход',data:T.map(t=>t.exp),borderColor:'#f5b84d',tension:0},
+    {label:'Прибыль',data:T.map(t=>t.profit),borderColor:'#4ade80',tension:0}]});
+}
+
+/* ===== СКЛАД И ПРОДАЖИ ===== */
+function renderSvp(){
+  const keys=mKeys();
+  const T=keys.map(k=>netTotals(data.months[k]));
+  mkChart('ch-svp','bar',{labels:keys.map(mShort),datasets:[
+    {label:'Склад (закуп)',data:T.map(t=>t.stock||null),backgroundColor:'rgba(138,180,255,.55)'},
+    {label:'Продажи',data:T.map(t=>t.rev),backgroundColor:'rgba(95,214,228,.55)'}]});
+  let h='<tr><th>Месяц</th>'+STORES.map(s=>`<th><span class="dot" style="background:${COLORS[s]}"></span>${s}</th>`).join('')+'<th>Итого склад</th><th>Продажи</th></tr>';
+  for(let i=0;i<keys.length;i++){
+    const m=data.months[keys[i]];
+    h+=`<tr><td>${mLabel(keys[i])}</td>`;
+    for(const s of STORES)h+=`<td>${m.stocks?.[s]?fmt(m.stocks[s].purchase):'—'}</td>`;
+    h+=`<td><b>${T[i].stock?fmt(T[i].stock):'—'}</b></td><td>${fmt(T[i].rev)}</td></tr>`;
+  }
+  document.getElementById('t-svp').innerHTML=keys.length?h:'<tr><td class="note">Нет данных.</td></tr>';
+}
+
+/* ===== ОБОРАЧИВАЕМОСТЬ ===== */
+function renderTurn(){
+  const keys=mKeys();
+  let h='<tr><th>Месяц</th>'+STORES.map(s=>`<th><span class="dot" style="background:${COLORS[s]}"></span>${s}</th>`).join('')+'<th>Сеть</th></tr>';
+  const perStore={};STORES.forEach(s=>perStore[s]=[]);const net=[];
+  for(const k of keys){
+    const m=data.months[k];h+=`<tr><td>${mLabel(k)}</td>`;
+    for(const s of STORES){
+      const d=m.stores?.[s],sk=m.stocks?.[s];
+      const c=(d&&sk&&d.goods&&sk.purchase)?sk.purchase/d.goods:null;
+      perStore[s].push(c);
+      if(c==null){h+='<td>—</td>';continue;}
+      const n=NORMS(s),cls=c>n+1?'bad':(c<n-1?'warn':'good');
+      h+=`<td><span class="tag ${cls}">${c.toFixed(1)}</span></td>`;
+    }
+    const t=netTotals(m);const nc=(t.stock&&t.goods)?t.stock/t.goods:null;net.push(nc);
+    h+=`<td><b>${nc!=null?nc.toFixed(1):'—'}</b></td></tr>`;
+  }
+  document.getElementById('t-turn').innerHTML=keys.length?h:'<tr><td class="note">Нет данных.</td></tr>';
+  const active=STORES.filter(s=>perStore[s].some(v=>v!=null));
+  mkChart('ch-turn','line',{labels:keys.map(mShort),datasets:[
+    ...active.map(s=>({label:s,data:perStore[s],borderColor:COLORS[s],tension:0,spanGaps:true})),
+    {label:'Сеть',data:net,borderColor:'#fff',borderWidth:2.5,borderDash:[6,4],tension:0,spanGaps:true}]});
+}
+
+/* ===== ОСТАТКИ СКЛАДОВ ===== */
+function renderStocks(){
+  const s=document.getElementById('stocks-store').value||STORES[0];
+  const keys=mKeys();
+  let h='<tr><th>Месяц</th><th>Закупная</th><th>Продажная</th><th>Наценка</th><th>Закуп месяца</th><th>Коэф. (запас, мес)</th></tr>';
+  const P=[],R=[];let any=false;
+  for(const k of keys){
+    const m=data.months[k],sk=m.stocks?.[s],d=m.stores?.[s];
+    P.push(sk?.purchase||null);R.push(sk?.retail||null);
+    if(!sk){h+=`<tr><td>${mLabel(k)}</td><td>—</td><td>—</td><td>—</td><td>${d?fmt(d.goods):'—'}</td><td>—</td></tr>`;continue;}
+    any=true;
+    const markup=sk.purchase?(sk.retail/sk.purchase):null;
+    const coef=(d&&d.goods)?sk.purchase/d.goods:null,n=NORMS(s);
+    h+=`<tr><td>${mLabel(k)}</td><td>${fmt(sk.purchase)}</td><td>${fmt(sk.retail)}</td>
+    <td>${markup?markup.toFixed(2)+'x':'—'}</td><td>${d?fmt(d.goods):'—'}</td>
+    <td>${coef!=null?`<span class="tag ${coef>n+1?'bad':(coef<n-1?'warn':'good')}">${coef.toFixed(1)} / ${n}</span>`:'—'}</td></tr>`;
+  }
+  document.getElementById('t-stocks').innerHTML=any?h:'<tr><td class="note">По этой точке остатки не загружены.</td></tr>';
+  mkChart('ch-stocks','bar',{labels:keys.map(mShort),datasets:[
+    {label:'Закупная',data:P,backgroundColor:COLORS[s]},
+    {label:'Продажная',data:R,backgroundColor:'rgba(255,255,255,.25)'}]});
+}
+
+/* ===== ИСТОРИЯ ВЫРУЧКИ ===== */
+function renderHist(){
+  const keys=mKeys();
+  const hist=(data.history||[]).slice();
+  const rows=[...hist.map((x,i)=>({label:x.label,rev:x.rev,idx:i})),
+    ...keys.map(k=>({label:mLabel(k),rev:netTotals(data.months[k]).rev,auto:true}))];
+  mkChart('ch-hist','line',{labels:rows.map(r=>r.label),datasets:[
+    {label:'Выручка сети',data:rows.map(r=>r.rev),borderColor:'#5fd6e4',backgroundColor:'rgba(95,214,228,.12)',fill:true,tension:0}]});
+  let h='<tr><th>Период</th><th>Выручка</th><th></th></tr>';
+  for(const r of hist.map((x,i)=>({...x,i})))
+    h+=`<tr><td>${r.label}</td><td>${fmt(r.rev)}</td><td><button class="btn danger sm" onclick="delHist(${r.i})">✕</button></td></tr>`;
+  if(!hist.length)h+='<tr><td class="note" colspan="3">Старых периодов пока нет — добавь ниже (например «2019» и годовая выручка, или отдельные месяцы).</td></tr>';
+  document.getElementById('t-hist').innerHTML=h;
+}
+async function addHist(){
+  const l=document.getElementById('hist-label').value.trim(),r=num(document.getElementById('hist-rev').value);
+  if(!l||!r)return;
+  data.history=data.history||[];data.history.push({label:l,rev:r});
+  document.getElementById('hist-label').value='';document.getElementById('hist-rev').value='';
+  await persist();renderHist();
+}
+async function delHist(i){data.history.splice(i,1);await persist();renderHist();}
+
+/* ===== МАГАЗИНЫ ===== */
+function renderStore(){
+  const s=document.getElementById('store-sel').value||STORES[0];
+  const keys=mKeys().filter(k=>data.months[k].stores?.[s]);
+  const kp=document.getElementById('store-kpis');
+  if(!keys.length){kp.innerHTML='';document.getElementById('t-store').innerHTML='<tr><td class="note">По этой точке нет данных.</td></tr>';document.getElementById('t-store-pct').innerHTML='';
+    mkChart('ch-store1','line',{labels:[],datasets:[]});mkChart('ch-store2','bar',{labels:[],datasets:[]});return;}
+  const last=keys[keys.length-1],dL=data.months[last].stores[s],cL=calc(dL,data.months[last].stocks?.[s]?.purchase);
+  const totRev=keys.reduce((a,k)=>a+(data.months[k].stores[s].rev||0),0);
+  const totProf=keys.reduce((a,k)=>a+calc(data.months[k].stores[s]).profit,0);
+  kp.innerHTML=`
+   <div class="card"><div class="kpi-l">${mLabel(last)} · выручка</div><div class="kpi-v">${fmtM(dL.rev)}</div></div>
+   <div class="card"><div class="kpi-l">${mLabel(last)} · прибыль</div><div class="kpi-v">${fmtM(cL.profit)}</div><div class="kpi-s ${cL.netM<0?'bad':cL.netM<.15?'warn':'good'}">маржа ${pct(cL.netM)}</div></div>
+   <div class="card"><div class="kpi-l">Выручка за всё время</div><div class="kpi-v">${fmtM(totRev)}</div></div>
+   <div class="card"><div class="kpi-l">Прибыль за всё время</div><div class="kpi-v">${fmtM(totProf)}</div><div class="kpi-s">${pct(totRev?totProf/totRev:null)} средняя маржа</div></div>`;
+
+  const ROWS=[
+    ['Выручка',(d,c)=>d.rev],['Товар/закуп',(d)=>d.goods],['Аренда+инт.',(d)=>d.rent],
+    ['ЗП продавцов',(d)=>d.salary],['Прочее',(d)=>d.other],['Итого расход',(d,c)=>c.exp],
+    ['Прибыль',(d,c)=>c.profit],['Чист. маржа',(d,c)=>c.netM,'pct'],['Вал. маржа',(d,c)=>c.grossM,'pct'],
+    ['Склад (закуп)',(d,c,sk)=>sk?.purchase],['Коэф. оборач.',(d,c)=>c.coef,'coef']];
+  let h='<tr><th>Показатель</th>'+keys.map(k=>`<th>${mShort(k)}</th>`).join('')+'<th>Итого</th><th>Среднее</th></tr>';
+  for(const[label,fn,kind]of ROWS){
+    const vals=keys.map(k=>{const m=data.months[k],d=m.stores[s],sk=m.stocks?.[s];return fn(d,calc(d,sk?.purchase),sk);});
+    const nums=vals.filter(v=>v!=null&&!isNaN(v));
+    const isP=kind==='pct',isC=kind==='coef';
+    const cell=v=>v==null||isNaN(v)?'—':isP?pct(v):isC?v.toFixed(2):fmt(v);
+    const sum=isP||isC?null:nums.reduce((a,b)=>a+b,0);
+    const avg=nums.length?nums.reduce((a,b)=>a+b,0)/nums.length:null;
+    h+=`<tr${label==='Итого расход'||label==='Прибыль'?' style="font-weight:700"':''}><td>${label}</td>${vals.map(v=>`<td class="${label==='Прибыль'&&v<0?'neg':''}">${cell(v)}</td>`).join('')}<td>${sum!=null?fmt(sum):'—'}</td><td>${cell(avg)}</td></tr>`;
+  }
+  document.getElementById('t-store').innerHTML=h;
+
+  let hp='<tr><th>Доля в расходах</th>'+keys.map(k=>`<th>${mShort(k)}</th>`).join('')+'</tr>';
+  for(const[label,f]of[['Товар %','goods'],['Аренда %','rent'],['ЗП %','salary'],['Прочее %','other']]){
+    hp+=`<tr><td>${label}</td>`+keys.map(k=>{
+      const d=data.months[k].stores[s],c=calc(d);
+      return `<td>${c.exp?pct((d[f]||0)/c.exp):'—'}</td>`;}).join('')+'</tr>';
+  }
+  document.getElementById('t-store-pct').innerHTML=hp;
+
+  const T=keys.map(k=>{const d=data.months[k].stores[s];return{d,c:calc(d)};});
+  mkChart('ch-store1','line',{labels:keys.map(mShort),datasets:[
+    {label:'Выручка',data:T.map(x=>x.d.rev),borderColor:COLORS[s],tension:0},
+    {label:'Прибыль',data:T.map(x=>x.c.profit),borderColor:'#4ade80',tension:0}]});
+  mkChart('ch-store2','bar',{labels:keys.map(mShort),datasets:[
+    ['goods','Товар','#3f7fc4'],['salary','ЗП','#e05a4e'],['rent','Аренда','#d9b323'],['other','Прочее','#9b59d0']]
+    .map(([f,l,c])=>({label:l,data:T.map(x=>x.c.exp?(x.d[f]||0)/x.c.exp*100:0),backgroundColor:c,stack:'p'}))},{stacked:true,max:100});
+}
+
+/* ===== НОВЫЙ МЕСЯЦ: загрузка/парсинг ===== */
+function initUp(){
+  const now=new Date();
+  document.getElementById('up-month').innerHTML=MONTHS_RU.map((m,i)=>`<option value="${i+1}">${m}</option>`).join('');
+  document.getElementById('up-month').value=now.getMonth()+1;
+  const y=now.getFullYear();
+  document.getElementById('up-year').innerHTML=[y-1,y,y+1].map(v=>`<option>${v}</option>`).join('');
+  document.getElementById('up-year').value=y;
+  bindDrop('drop-fin','file-fin',f=>readXlsx(f,parseFin));
+  bindDrop('drop-stock','file-stock',f=>readXlsx(f,parseStock));
+  bindDrop('drop-imp','file-imp',f=>readXlsx(f,importDashboard));
+  document.getElementById('file-json').addEventListener('change',e=>{
+    const f=e.target.files[0];if(!f)return;
+    const r=new FileReader();r.onload=async()=>{try{data=JSON.parse(r.result);data.history=data.history||[];await persist();refreshAll();
+      showMsg('data-msg','Данные восстановлены из копии.','ok');}catch(err){showMsg('data-msg','Файл не похож на копию: '+err.message,'err');}};
+    r.readAsText(f);e.target.value='';
+  });
+  renderEdit();
+}
+function bindDrop(dropId,fileId,handler){
+  const d=document.getElementById(dropId),f=document.getElementById(fileId);
+  d.addEventListener('click',()=>f.click());
+  d.addEventListener('dragover',e=>{e.preventDefault();d.classList.add('over');});
+  d.addEventListener('dragleave',()=>d.classList.remove('over'));
+  d.addEventListener('drop',e=>{e.preventDefault();d.classList.remove('over');if(e.dataTransfer.files[0])handler(e.dataTransfer.files[0]);});
+  f.addEventListener('change',e=>{if(e.target.files[0])handler(e.target.files[0]);e.target.value='';});
+}
+function readXlsx(file,cb){
+  const r=new FileReader();
+  r.onload=()=>{try{cb(XLSX.read(r.result,{type:'array'}),file.name);}
+    catch(e){showMsg('up-msg','Не удалось прочитать файл: '+e.message,'err');showMsg('data-msg','Не удалось прочитать файл: '+e.message,'err');}};
+  r.readAsArrayBuffer(file);
+}
+const ensurePending=()=>pending||(pending={stores:{},stocks:{}});
+function guessMonthFromName(name){
+  const low=name.toLowerCase();
+  MONTHS_RU.forEach((m,i)=>{if(low.includes(m.toLowerCase().slice(0,4)))document.getElementById('up-month').value=i+1;});
+  const y=low.match(/20\d\d/);
+  if(y){const sel=document.getElementById('up-year');
+    if(![...sel.options].some(o=>o.value===y[0]))sel.add(new Option(y[0],y[0]));sel.value=y[0];}
+}
+function parseFin(wb,fname){
+  guessMonthFromName(fname);
+  const p=ensurePending();let found=0;
+  for(const sn of wb.SheetNames){
+    const rows=XLSX.utils.sheet_to_json(wb.Sheets[sn],{header:1,defval:null});
+    let map=null;
+    for(const row of rows){
+      if(!row)continue;const idx={};
+      row.forEach((c,i)=>{if(c==null)return;const s=String(c).toLowerCase();
+        if(/выруч|доход/.test(s)&&idx.rev==null)idx.rev=i;
+        if(/товар|закуп/.test(s)&&idx.goods==null)idx.goods=i;
+        if(/аренд/.test(s)&&idx.rent==null)idx.rent=i;
+        if(/зп|зарп|оклад/.test(s)&&idx.salary==null)idx.salary=i;
+        if(/проч/.test(s)&&idx.other==null)idx.other=i;});
+      if(idx.rev!=null&&idx.goods!=null){map=idx;break;}
+    }
+    for(const row of rows){
+      if(!row)continue;
+      let store=null,si=-1;
+      for(let i=0;i<Math.min(row.length,4);i++){const st=normStore(row[i]);if(st){store=st;si=i;break;}}
+      if(!store)continue;
+      const vals=map?{rev:num(row[map.rev]),goods:num(row[map.goods]),rent:num(row[map.rent]),salary:num(row[map.salary]),other:num(row[map.other])}
+        :{rev:num(row[si+1]),goods:num(row[si+2]),rent:num(row[si+3]),salary:num(row[si+4]),other:num(row[si+5])};
+      if(vals.rev||vals.goods){p.stores[store]=vals;found++;}
+    }
+    if(found)break;
+  }
+  showMsg('up-msg',found?`Расход/доход: распознано точек — ${found}. Проверь таблицу.`:'Строки с названиями точек не найдены — заполни таблицу вручную.',found?'ok':'err');
+  renderEdit();
+}
+function parseStock(wb){
+  const p=ensurePending();let found=0;
+  for(const sn of wb.SheetNames){
+    const rows=XLSX.utils.sheet_to_json(wb.Sheets[sn],{header:1,defval:null});
+    for(const row of rows){
+      if(!row)continue;
+      let store=null,si=-1;
+      for(let i=0;i<Math.min(row.length,4);i++){const st=normStore(row[i]);if(st){store=st;si=i;break;}}
+      if(!store)continue;
+      const nums=row.slice(si+1).map(num).filter(v=>v>0);
+      if(nums.length){p.stocks[store]={purchase:nums[0],retail:nums[1]||0};found++;}
+    }
+    if(found)break;
+  }
+  showMsg('up-msg',found?`Остатки: распознано точек — ${found}.`:'Остатки не распознаны — впиши вручную.',found?'ok':'err');
+  renderEdit();
+}
+function renderEdit(){
+  const p=ensurePending();
+  let h='<tr><th>Точка</th>'+FIELDS.map(f=>`<th>${f[1]}</th>`).join('')+'<th>Остаток закуп</th><th>Остаток продажная</th></tr>';
+  for(const s of STORES){
+    const d=p.stores[s]||{},sk=p.stocks[s]||{};
+    h+=`<tr><td><span class="dot" style="background:${COLORS[s]}"></span>${s}</td>`;
+    for(const[f]of FIELDS)h+=`<td><input type="number" data-s="${s}" data-f="${f}" value="${d[f]??''}"></td>`;
+    h+=`<td><input type="number" data-s="${s}" data-f="purchase" value="${sk.purchase??''}"></td>`;
+    h+=`<td><input type="number" data-s="${s}" data-f="retail" value="${sk.retail??''}"></td></tr>`;
+  }
+  const el=document.getElementById('t-edit');el.innerHTML=h;
+  el.querySelectorAll('input').forEach(inp=>inp.addEventListener('input',()=>{
+    const s=inp.dataset.s,f=inp.dataset.f,v=inp.value===''?null:num(inp.value);
+    if(f==='purchase'||f==='retail'){p.stocks[s]=p.stocks[s]||{};p.stocks[s][f]=v??0;}
+    else{p.stores[s]=p.stores[s]||{};p.stores[s][f]=v??0;}
+  }));
+}
+async function saveMonth(){
+  const p=ensurePending();
+  const mm=String(document.getElementById('up-month').value).padStart(2,'0');
+  const key=document.getElementById('up-year').value+'-'+mm;
+  const stores={},stocks={};
+  for(const s of STORES){
+    const d=p.stores[s];if(d&&(d.rev||d.goods||d.salary))stores[s]={rev:d.rev||0,goods:d.goods||0,rent:d.rent||0,salary:d.salary||0,other:d.other||0};
+    const sk=p.stocks[s];if(sk&&sk.purchase)stocks[s]={purchase:sk.purchase||0,retail:sk.retail||0};
+  }
+  if(!Object.keys(stores).length&&!Object.keys(stocks).length){showMsg('up-msg','Нет данных для сохранения.','err');return;}
+  const prev=data.months[key]||{};
+  data.months[key]={stores:Object.keys(stores).length?stores:(prev.stores||{}),stocks:Object.keys(stocks).length?stocks:(prev.stocks||{})};
+  await persist();pending=null;renderEdit();refreshAll();
+  showMsg('up-msg',mLabel(key)+' сохранён. Все вкладки обновлены.','ok');
+  go('dash');
+}
+
+/* ===== импорт дашборда ===== */
+function importDashboard(wb){
+  let added=0,stockRows=0,histRows=0;
+  const dataSheet=wb.SheetNames.find(n=>n.includes('Данные'));
+  if(dataSheet){
+    const rows=XLSX.utils.sheet_to_json(wb.Sheets[dataSheet],{header:1,defval:null});
+    for(const row of rows){
+      if(!row||row.length<4)continue;
+      const key=parseMonthLabel(row[0]),store=normStore(row[1]);
+      if(!key||!store)continue;
+      data.months[key]=data.months[key]||{stores:{},stocks:{}};
+      data.months[key].stores[store]={rev:num(row[2]),goods:num(row[3]),rent:num(row[4]),salary:num(row[5]),other:num(row[6])};
+      added++;
+    }
+  }
+  const stSheet=wb.SheetNames.find(n=>n.includes('Остатки складов'));
+  if(stSheet){
+    const rows=XLSX.utils.sheet_to_json(wb.Sheets[stSheet],{header:1,defval:null,blankrows:true});
+    let curStore=null;
+    for(const row of rows){
+      if(!row)continue;
+      const c0=row[0]!=null?String(row[0]).trim():'';
+      const asStore=normStore(c0);
+      if(asStore&&!parseMonthLabel(c0)){curStore=asStore;continue;}
+      if(/итого/i.test(c0)){curStore=null;continue;}
+      if(!curStore)continue;
+      const mk=parseMonthLabel(c0);
+      if(mk){
+        const nums=row.slice(1).map(num).filter(v=>v>0);
+        if(nums.length){
+          data.months[mk]=data.months[mk]||{stores:{},stocks:{}};
+          data.months[mk].stocks[curStore]={purchase:nums[0],retail:nums[1]||0};
+          stockRows++;
+        }
+      }
+    }
+  }
+  const hSheet=wb.SheetNames.find(n=>n.includes('История'));
+  if(hSheet){
+    const rows=XLSX.utils.sheet_to_json(wb.Sheets[hSheet],{header:1,defval:null});
+    const hist=[];
+    for(const row of rows){
+      if(!row)continue;
+      const label=row[0]!=null?String(row[0]).trim():'';
+      const v=row.slice(1).map(num).find(x=>x>0);
+      if(!label||!v)continue;
+      if(parseMonthLabel(label)&&data.months[parseMonthLabel(label)])continue; // уже есть в помесячных данных
+      if(/итого|всего/i.test(label))continue;
+      hist.push({label,rev:v});
+    }
+    if(hist.length){data.history=hist;histRows=hist.length;}
+  }
+  persist().then(()=>{refreshAll();
+    showMsg('data-msg',added?`Импортировано: строк данных — ${added}`+(stockRows?`, остатков — ${stockRows}`:'')+(histRows?`, истории — ${histRows}`:'')+'. Всё готово.':'Лист «📊 Данные» не найден или пуст — проверь файл.',added?'ok':'err');});
+}
+function parseMonthLabel(v){
+  if(v==null)return null;
+  if(v instanceof Date)return v.getFullYear()+'-'+String(v.getMonth()+1).padStart(2,'0');
+  const s=String(v).trim().toLowerCase();
+  for(let i=0;i<12;i++){
+    if(s.startsWith(MONTHS_RU[i].toLowerCase())||s.startsWith(M_SHORT[i].toLowerCase())){
+      const y=s.match(/20\d\d/);const year=y?y[0]:(i+1>=8?'2025':'2026');
+      return year+'-'+String(i+1).padStart(2,'0');
+    }
+  }
+  return null;
+}
+
+/* ===== список месяцев ===== */
+function renderMonthsList(){
+  const keys=mKeys();
+  let h='<tr><th>Месяц</th><th>Точек с данными</th><th>Точек с остатками</th><th>Выручка</th><th>Прибыль</th><th></th></tr>';
+  if(!keys.length)h='<tr><td class="note">Пока пусто.</td></tr>';
+  for(const k of keys.slice().reverse()){
+    const m=data.months[k],t=netTotals(m);
+    h+=`<tr><td>${mLabel(k)}</td><td>${Object.keys(m.stores||{}).length}</td><td>${Object.keys(m.stocks||{}).length}</td>
+    <td>${fmt(t.rev)}</td><td class="${t.profit<0?'neg':'pos'}">${fmt(t.profit)}</td>
+    <td><button class="btn danger sm" onclick="delMonth('${k}')">Удалить</button></td></tr>`;
+  }
+  document.getElementById('t-months').innerHTML=h;
+}
+async function delMonth(k){
+  if(!confirm('Удалить '+mLabel(k)+'? Действие нельзя отменить.'))return;
+  delete data.months[k];await persist();refreshAll();
+}
+function exportJSON(){
+  const blob=new Blob([JSON.stringify(data,null,1)],{type:'application/json'});
+  const a=document.createElement('a');a.href=URL.createObjectURL(blob);
+  a.download='topglass_финансы_копия.json';a.click();
+}
+
+/* ===== старт ===== */
+buildNav();initUp();loadData();
+</script>
+</body>
+</html>
